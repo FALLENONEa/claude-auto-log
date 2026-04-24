@@ -1,6 +1,6 @@
 {
   "name": "claude-auto-log",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "One-command installer for Claude Code auto logs and daily reports.",
   "bin": {
     "claude-auto-log": "./bin/claude-auto-log.js"

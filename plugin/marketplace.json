@@ -1,0 +1,15 @@
+{
+  "name": "local-auto-log",
+  "owner": {
+    "name": "FALLENONEa"
+  },
+  "plugins": [
+    {
+      "name": "claude-auto-log",
+      "version": "0.1.0",
+      "description": "Automatic conversation logging and daily report generation for Claude Code.",
+      "category": "productivity",
+      "source": "./"
+    }
+  ]
+}

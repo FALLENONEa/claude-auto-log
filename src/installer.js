@@ -81,18 +81,10 @@ function subtractMinutes(hour, minute, delta) {
 }
 
 function ensurePluginFiles() {
-  fs.mkdirSync(vendorDir, { recursive: true });
-  if (fs.existsSync(pluginInstallDir)) {
+  fs.mkdirSync(vendorDir, { recursive: true });  if (fs.existsSync(pluginInstallDir)) {
     fs.rmSync(pluginInstallDir, { recursive: true, force: true });
   }
   copyDir(pluginSourceDir, pluginInstallDir);
-}
-
-function registerMarketplace() {
-  const marketplacePath = path.join(pluginInstallDir, 'marketplace.json');
-  try {
-    execSync(`claude plugin marketplace add "${marketplacePath}"`, { stdio: 'pipe' });
-  } catch {}
 }
 
 function ensureStopHook() {
@@ -317,7 +309,6 @@ async function installAll({ offTime, noScheduler }) {
   const trigger = subtractMinutes(hour, minute, 5);
 
   ensurePluginFiles();
-  registerMarketplace();
   ensureStopHook();
   if (!noScheduler) {
     installScheduler(trigger.hour, trigger.minute);

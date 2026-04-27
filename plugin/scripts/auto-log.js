@@ -61,6 +61,8 @@ process.stdin.on('end', () => {
       }
     }
 
+    const tokenUsage = extractTokenUsage(messages, userIdx, lastAssistantIdx);
+
     if (!userText && !assistantText) process.exit(0);
 
     const now = new Date();
@@ -85,6 +87,11 @@ process.stdin.on('end', () => {
       const min = Math.floor(duration / 60);
       const sec = duration % 60;
       entry += ` | 耗时: ${min > 0 ? min + 'm' : ''}${sec}s`;
+    }
+
+    if (tokenUsage.total > 0) {
+      entry += ` | 输入Token: ${formatTokenCount(tokenUsage.input)} | 输出Token: ${formatTokenCount(tokenUsage.output)} | 总计Token: ${formatTokenCount(tokenUsage.total)}`;
+      entry += `\n<!-- token_stats input=${tokenUsage.input} output=${tokenUsage.output} total=${tokenUsage.total} -->`;
     }
 
     entry += `\n\n### 用户问题\n${userText}\n\n### Claude回答\n${assistantText}`;
@@ -153,4 +160,36 @@ function extractCodeChanges(message, fallbackText) {
   }
 
   return changes;
+}
+
+function extractTokenUsage(messages, startIdx, endIdx) {
+  const totals = { input: 0, output: 0, total: 0 };
+  const seen = new Set();
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const entry = messages[i];
+    if (!entry || entry.type !== 'assistant' || !entry.message) continue;
+
+    const responseId = entry.message.id || entry.uuid || String(i);
+    if (seen.has(responseId)) continue;
+    seen.add(responseId);
+
+    const usage = entry.message.usage || {};
+    totals.input += toInt(usage.input_tokens);
+    totals.output += toInt(usage.output_tokens);
+  }
+
+  totals.total = totals.input + totals.output;
+  return totals;
+}
+
+function toInt(value) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+function formatTokenCount(value) {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return String(value);
 }

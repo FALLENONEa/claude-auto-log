@@ -63,9 +63,14 @@ for (const file of logFiles) {
   }
   const totalMin = Math.round(totalSec / 60);
 
+  const tokenStats = extractTokenStats(content);
+
   let stats = `**代码变更**: 编辑 ${editCount} 个文件，新建 ${createCount} 个文件，共涉及 ${changedFiles.size} 个文件`;
   if (totalMin > 0) {
     stats += `\n**时间投入**: 约 ${totalMin} 分钟`;
+  }
+  if (tokenStats.total > 0) {
+    stats += `\n**Token消耗**: 总计 ${formatTokenCount(tokenStats.total)}（输入 ${formatTokenCount(tokenStats.input)}，输出 ${formatTokenCount(tokenStats.output)}）`;
   }
 
   allContent += `\n# 项目: ${projectName}\n\n${stats}\n\n${content}\n`;
@@ -77,7 +82,7 @@ const prompt = `你是一个工作日报生成助手。请根据以下今天的�
 1. 用中文输出
 2. 按项目分组总结
 3. 每个项目列出：完成了什么、修改了哪些文件
-4. 每个项目开头展示该项目的统计数据（代码变更文件数、时间投入），这些数据是精确统计的，直接引用
+4. 每个项目开头展示该项目的统计数据（代码变更文件数、时间投入、Token消耗），这些数据是精确统计的，直接引用
 5. 如有未完成或进行中的工作，单独列出
 6. 不要照搬原文，要提炼总结
 7. 格式用 markdown
@@ -148,4 +153,27 @@ function generateReport(prompt) {
     req.write(body);
     req.end();
   });
+}
+
+function extractTokenStats(content) {
+  const totals = { input: 0, output: 0, total: 0 };
+  const tokenRegex = /<!-- token_stats input=(\d+) output=(\d+)(?: cache=\d+)? total=(\d+) -->/g;
+  let match;
+
+  while ((match = tokenRegex.exec(content)) !== null) {
+    const input = Number(match[1]) || 0;
+    const output = Number(match[2]) || 0;
+    totals.input += input;
+    totals.output += output;
+    totals.total += input + output;
+  }
+
+  return totals;
+}
+
+function formatTokenCount(value) {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1).replace(/\.0$/, '')}k`;
+  }
+  return String(value);
 }

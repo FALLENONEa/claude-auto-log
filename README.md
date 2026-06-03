@@ -77,12 +77,28 @@ Reports are saved to / 日报保存路径：`~/.claude/cclogs/YYYY-MM-DD/daily-r
 
 ## Toggle Logging / 日志开关
 
+**By default, logging is PAUSED after installation.** You need to manually enable it by creating the `.enabled` marker file.
+
+**安装后默认暂停记录。** 需要手动创建 `.enabled` 标记文件来开启日志。
+
+**Enable (start logging) / 开启记录：**
+
 ```bash
-# Pause logging / 暂停记录
+# macOS / Linux / Git Bash
+touch ~/.claude/cclogs/.enabled
+
+# Windows PowerShell
+New-Item "$env:USERPROFILE\.claude\cclogs\.enabled" -ItemType File -Force
+```
+
+**Disable (pause logging) / 暂停记录：**
+
+```bash
+# macOS / Linux / Git Bash
 rm ~/.claude/cclogs/.enabled
 
-# Resume logging / 恢复记录
-touch ~/.claude/cclogs/.enabled
+# Windows PowerShell
+Remove-Item "$env:USERPROFILE\.claude\cclogs\.enabled"
 ```
 
 ## License / 许可证

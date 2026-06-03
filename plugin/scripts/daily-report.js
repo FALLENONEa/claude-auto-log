@@ -43,7 +43,9 @@ let allContent = '';
 for (const file of logFiles) {
   const filePath = path.join(todayDir, file);
   const content = fs.readFileSync(filePath, 'utf-8');
-  const projectName = file.replace('.md', '');
+  const isCodex = file.startsWith('codex-');
+  const projectName = file.replace(/^(codex-)?/, '').replace('.md', '');
+  const sourceLabel = isCodex ? 'Codex CLI' : 'Claude Code';
 
   const editCount = (content.match(/^- 编辑:/gm) || []).length;
   const createCount = (content.match(/^- 新建:/gm) || []).length;
@@ -63,9 +65,23 @@ for (const file of logFiles) {
   }
   const totalMin = Math.round(totalSec / 60);
 
+  const timeRegex = /^## \[对话记录\] (\d{2}:\d{2}:\d{2})/gm;
+  let firstTime = null, lastTime = null;
+  while ((m = timeRegex.exec(content)) !== null) {
+    const t = m[1];
+    if (!firstTime || t < firstTime) firstTime = t;
+    if (!lastTime || t > lastTime) lastTime = t;
+  }
+  const timeRange = firstTime && lastTime && firstTime !== lastTime
+    ? `${firstTime.slice(0, 5)} - ${lastTime.slice(0, 5)}`
+    : firstTime ? firstTime.slice(0, 5) : '';
+
   const tokenStats = extractTokenStats(content);
 
   let stats = `**代码变更**: 编辑 ${editCount} 个文件，新建 ${createCount} 个文件，共涉及 ${changedFiles.size} 个文件`;
+  if (timeRange) {
+    stats += `\n**工作时段**: ${timeRange}`;
+  }
   if (totalMin > 0) {
     stats += `\n**时间投入**: 约 ${totalMin} 分钟`;
   }
@@ -73,33 +89,52 @@ for (const file of logFiles) {
     stats += `\n**Token消耗**: 总计 ${formatTokenCount(tokenStats.total)}（输入 ${formatTokenCount(tokenStats.input)}，输出 ${formatTokenCount(tokenStats.output)}）`;
   }
 
-  allContent += `\n# 项目: ${projectName}\n\n${stats}\n\n${content}\n`;
+  allContent += `\n# 项目: ${projectName}（${sourceLabel}）\n\n${stats}\n\n${content}\n`;
 }
 
 const prompt = `你是一个工作日报生成助手。请根据以下今天的对话记录和代码变更记录，生成一份简洁的工作日报。
 
 要求：
 1. 用中文输出
-2. 按项目分组总结
-3. 每个项目列出：完成了什么、修改了哪些文件
-4. 每个项目开头展示该项目的统计数据（代码变更文件数、时间投入、Token消耗），这些数据是精确统计的，直接引用
-5. 如有未完成或进行中的工作，单独列出
-6. 不要照搬原文，要提炼总结
-7. 格式用 markdown
+2. 按项目分组总结，每个项目下的工作条目按对话记录中的时间顺序排列
+3. 每个工作条目标注大致时间（从对话记录中的 [对话记录] HH:MM:SS 时间戳推断），格式为 "HH:MM - HH:MM" 或 "HH:MM"
+4. 每个项目列出：完成了什么、修改了哪些文件
+5. 每个项目开头展示该项目的统计数据（代码变更文件数、工作时段、时间投入、Token消耗），这些数据是精确统计的，直接引用
+6. 如有未完成或进行中的工作，单独列出
+7. 不要照搬原文，要提炼总结
+8. 格式用 markdown
 
 以下是对话记录：
 
 ${allContent}`;
 
-generateReport(prompt).then(text => {
-  const reportPath = path.join(todayDir, 'daily-report.md');
+generateReportWithRetry(prompt, 10).then(text => {
   const header = `# Daily Report ${today}\n\n`;
+  const reportPath = path.join(todayDir, 'daily-report.md');
   fs.writeFileSync(reportPath, header + text, 'utf-8');
   console.log('[日报] 已生成: ' + reportPath);
 }).catch(err => {
   console.log('[日报] 生成失败: ' + err.message);
   process.exit(1);
 });
+
+async function generateReportWithRetry(prompt, attempts) {
+  let lastError = null;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await generateReport(prompt);
+    } catch (err) {
+      lastError = err;
+      console.log(`[日报] 生成失败，第 ${i}/${attempts} 次: ${err.message}`);
+      if (i < attempts) await delay(i === 1 ? 5000 : 15000);
+    }
+  }
+  throw lastError;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function generateReport(prompt) {
   return new Promise((resolve, reject) => {
@@ -131,6 +166,10 @@ function generateReport(prompt) {
       res.on('end', () => {
         try {
           const json = JSON.parse(data);
+          if (res.statusCode && res.statusCode >= 400) {
+            reject(new Error(json.error?.message || `HTTP ${res.statusCode}`));
+            return;
+          }
           const textBlock = Array.isArray(json.content)
             ? json.content.find(block => block && block.type === 'text' && typeof block.text === 'string')
             : null;
@@ -150,6 +189,7 @@ function generateReport(prompt) {
     });
 
     req.on('error', reject);
+    req.setTimeout(120000, () => req.destroy(new Error('请求超时')));
     req.write(body);
     req.end();
   });
